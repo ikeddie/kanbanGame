@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Simulation Game</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        /* General body styling */
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            background-color: #f0f2f5; /* Light gray background */
+            margin: 0;
+            padding: 10px; /* Reduced body padding */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh; /* Ensure body takes full viewport height */
+            box-sizing: border-box;
+            overflow-x: auto; /* Allow horizontal scrolling if content overflows */
+        }
+
+        /* Day counter and Profit display */
+        #gameStats {
+            display: flex;
+            gap: 20px; /* Reduced gap */
+            font-size: 1.5em; /* Reduced font size */
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px; /* Reduced margin */
+            background-color: #e0f7fa;
+            padding: 8px 15px; /* Reduced padding */
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Resources container (waiting area) */
+        .resources-container {
+            display: flex;
+            gap: 10px; /* Reduced gap */
+            margin-bottom: 15px; /* Reduced margin */
+            padding: 10px; /* Reduced padding */
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 800px;
+            min-height: 40px; /* Reduced min-height */
+        }
+
+        /* Individual resource styling */
+        .resource {
+            padding: 6px 10px; /* Further adjusted padding */
+            border-radius: 8px;
+            cursor: grab;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px; /* Reduced gap */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            opacity: 1; /* Default opacity */
+        }
+
+        .resource.dragging-resource {
+            opacity: 0.5; /* Fade out when dragging */
+        }
+
+        .resource.allocated {
+            opacity: 0.7; /* Slightly faded when allocated to a story */
+            cursor: grab; /* Still draggable when allocated */
+        }
+
+        .resource:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .resource i {
+            font-size: 1.5em; /* Slightly reduced icon size */
+        }
+
+        /* Specific resource colors */
+        .resource[data-resource-type="analyst"] {
+            background-color: #ffcdd2; /* Light Red */
+            border: 1px solid #ef9a9a;
+        }
+        .resource[data-resource-type="developer"] {
+            background-color: #bbdefb; /* Light Blue */
+            border: 1px solid #90caf9;
+        }
+        .resource[data-resource-type="tester"] {
+            background-color: #c8e6c9; /* Light Green */
+            border: 1px solid #a5d6a7;
+        }
+
+        /* Main container for the game */
+        .kanban-container {
+            display: flex;
+            flex-wrap: nowrap; /* IMPORTANT: Prevent groups from wrapping */
+            gap: 10px; /* Reduced space between groups */
+            width: 100%;
+            /* max-width: 2000px; Removed max-width to allow expansion */
+            margin-top: 15px; /* Reduced margin */
+            justify-content: center; /* Center groups */
+        }
+
+        /* Styling for the new Kanban group containers */
+        .kanban-group {
+            background-color: #f8f8f8; /* Slightly different background for groups */
+            border: 1px solid #e0e0e0;
+            border-radius: 12px; /* Slightly reduced border-radius */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08); /* Reduced shadow */
+            padding: 10px; /* Padding for the group box to match internal gap */
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Space between group title and columns */
+            flex-grow: 1;
+            flex-shrink: 0; /* IMPORTANT: Prevent groups from shrinking */
+            min-width: 180px; /* Adjusted min-width for the group */
+        }
+
+        .kanban-group-header {
+            font-size: 1.4em; /* Reduced font size */
+            font-weight: bold;
+            color: #444;
+            text-align: center;
+            margin-bottom: 5px; /* Reduced margin */
+            padding-bottom: 3px; /* Reduced padding */
+            border-bottom: 1px solid #ddd; /* Thinner border */
+        }
+
+        .kanban-group-columns {
+            display: flex;
+            gap: 10px; /* Space between columns within a group */
+            flex-wrap: nowrap; /* Prevent columns within groups from wrapping too early */
+            justify-content: center;
+            align-items: flex-start; /* Prevent columns from stretching */
+        }
+
+
+        /* Styling for each Kanban column */
+        .kanban-column {
+            background-color: #ffffff;
+            border-radius: 10px; /* Slightly reduced border-radius */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* Reduced shadow */
+            padding: 10px; /* Reduced padding from 15px to 10px */
+            flex: 1;
+            min-width: 160px; /* Adjusted min-width for columns */
+            max-width: 220px; /* Adjusted max-width for columns */
+            display: flex;
+            flex-direction: column;
+            gap: 10px; /* Reduced space between cards */
+            min-height: 250px; /* Reduced min-height */
+        }
+
+        /* Specific style for the Backlog column */
+        #backlog {
+            background-color: #ffe0b2; /* Light orange background for Backlog */
+            border: 1px solid #ffcc80;
+        }
+
+        /* Specific styles for Analysis buckets (Red) */
+        #analyzed-in-progress, #analyzed-done {
+            background-color: #ffcdd2; /* Light Red */
+            border: 1px solid #ef9a9a;
+        }
+
+        /* Specific styles for Development buckets (Blue) */
+        #developed-in-progress, #developed-done {
+            background-color: #bbdefb; /* Light Blue */
+            border: 1px solid #90caf9;
+        }
+
+        /* Specific style for Testing bucket (Green) */
+        #testing {
+            background-color: #c8e6c9; /* Light Green */
+            border: 1px solid #a5d6a7;
+        }
+
+        /* Column header styling */
+        .column-header {
+            font-size: 1.3em; /* Reduced font size */
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px; /* Reduced margin */
+            text-align: center;
+        }
+
+        /* Styling for individual user story cards */
+        .kanban-card {
+            background-color: #e0f7fa;
+            border: 1px solid #b2ebf2;
+            border-radius: 6px; /* Slightly reduced border-radius */
+            padding: 10px; /* Reduced padding */
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* Reduced shadow */
+            cursor: grab;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            word-wrap: break-word;
+            display: flex;
+            flex-direction: column;
+            gap: 3px; /* Reduced gap */
+        }
+
+        .kanban-card:active {
+            cursor: grabbing;
+            transform: scale(1.02);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .kanban-card .story-description {
+            font-weight: bold;
+            margin-bottom: 3px; /* Reduced margin */
+            color: #333;
+            font-size: 0.95em; /* Slightly reduced font size */
+        }
+
+        .kanban-card .story-details {
+            font-size: 0.8em; /* Reduced font size */
+            color: #555;
+        }
+
+        /* Highlighted effort styling */
+        .story-details .highlight-effort {
+            font-weight: bold;
+            color: #007bff; /* Blue highlight */
+            background-color: #e6f7ff; /* Light blue background for highlight */
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+
+        /* Deployed story styling - hide effort details */
+        .kanban-card.deployed-story .story-details .effort-line {
+            display: none; /* Hide effort lines for deployed stories */
+        }
+
+
+        .allocated-resources-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px; /* Reduced gap */
+            margin-top: 3px; /* Reduced margin */
+            padding-top: 3px; /* Reduced padding */
+            border-top: 1px dashed #ccc;
+        }
+
+        .allocated-resources-container .resource {
+            padding: 3px; /* Further reduced padding */
+            font-size: 0.7em; /* Further reduced font size */
+            cursor: default;
+            box-shadow: none;
+            opacity: 1;
+            transition: none;
+        }
+
+        .allocated-resources-container .resource i {
+             font-size: 1em; /* Further reduced icon size */
+        }
+
+        /* New styling for prioritized stories based on readiness */
+        .kanban-card.prioritized-ready {
+            border: 2px solid #4CAF50; /* Green border when ready to move */
+        }
+
+        .kanban-card.prioritized-not-ready {
+            border: 2px solid #f44336; /* Red border when not ready to move */
+        }
+
+
+        /* Drag and drop feedback for cards as drop targets */
+        .kanban-card.drag-over-resource {
+            border: 2px dashed #007bff;
+            background-color: #e3f2fd;
+        }
+
+        /* Styling for buttons */
+        .button {
+            padding: 10px 18px; /* Reduced padding */
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em; /* Reduced font size */
+            font-weight: bold;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out, box-shadow 0.2s ease-in-out;
+            box-shadow: 0 3px 5px rgba(0, 123, 255, 0.2); /* Reduced shadow */
+        }
+
+        .button:hover {
+            background-color: #0056b3;
+            transform: translateY(-1px); /* Reduced lift */
+            box-shadow: 0 4px 6px rgba(0, 123, 255, 0.3);
+        }
+
+        .button:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0, 123, 255, 0.2);
+        }
+
+        .button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Drag and drop feedback for columns */
+        .kanban-column.drag-over {
+            background-color: #e0ffe0;
+            border: 2px dashed #4CAF50;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 1800px) { /* Adjusted breakpoint for more columns */
+            .kanban-container {
+                flex-direction: column; /* Stack groups vertically on smaller screens */
+                align-items: center;
+            }
+
+            .kanban-group {
+                width: 95%; /* Take more width on small screens */
+                max-width: 600px; /* Limit max width for groups */
+            }
+
+            .kanban-group-columns {
+                flex-direction: column; /* Stack columns within groups vertically */
+                align-items: center;
+            }
+
+            .kanban-column {
+                width: 90%; /* Take more width on small screens */
+                max-width: 400px; /* Limit max width even when stacked */
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Kanban Simulation Game</h1>
+
+    <div id="gameStats">
+        <span id="dayCounterDisplay">Day: 1 / 35</span>
+        <span id="profitDisplay">Profit: $0</span>
+    </div>
+
+    <button class="button" id="completeRoundButton" style="margin-bottom: 20px;">Complete Round</button>
+
+    <div class="resources-container" id="waitingResources">
+        </div>
+
+    <div class="kanban-container">
+        <div class="kanban-group" id="customer-group">
+            <div class="kanban-group-header">Customer</div>
+            <div class="kanban-group-columns">
+                <div class="kanban-column" id="backlog">
+                    <div class="column-header">Backlog <i class="fas fa-archive"></i></div>
+                </div>
+                <div class="kanban-column" id="prioritized">
+                    <div class="column-header">Prioritized <i class="fas fa-list-ol"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="kanban-group" id="cto-group">
+            <div class="kanban-group-header">CTO</div>
+            <div class="kanban-group-columns">
+                <div class="kanban-column" id="analyzed-in-progress">
+                    <div class="column-header">Analysis (In Progress) <i class="fas fa-spinner"></i></div>
+                </div>
+                <div class="kanban-column" id="analyzed-done">
+                    <div class="column-header">Analysis (Done) <i class="fas fa-check-double"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="kanban-group" id="delivery-group">
+            <div class="kanban-group-header">Delivery</div>
+            <div class="kanban-group-columns">
+                <div class="kanban-column" id="developed-in-progress">
+                    <div class="column-header">Development (In Progress) <i class="fas fa-cogs"></i></div>
+                </div>
+                <div class="kanban-column" id="developed-done">
+                    <div class="column-header">Development (Done) <i class="fas fa-code-branch"></i></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="kanban-group" id="platforms-services-group">
+            <div class="kanban-group-header">Platforms and Services</div>
+            <div class="kanban-group-columns">
+                <div class="kanban-column" id="testing">
+                    <div class="column-header">Testing <i class="fas fa-check-circle"></i></div>
+                </div>
+                <div class="kanban-column" id="deployed">
+                    <div class="column-header">Deployed <i class="fas fa-rocket"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const backlogColumn = document.getElementById('backlog');
+        const prioritizedColumn = document.getElementById('prioritized');
+        const analyzedInProgressColumn = document.getElementById('analyzed-in-progress');
+        const analyzedDoneColumn = document.getElementById('analyzed-done');
+        const developedInProgressColumn = document.getElementById('developed-in-progress');
+        const developedDoneColumn = document.getElementById('developed-done');
+        const testingColumn = document.getElementById('testing');
+        const deployedColumn = document.getElementById('deployed');
+        const dayCounterDisplay = document.getElementById('dayCounterDisplay');
+        const profitDisplay = document.getElementById('profitDisplay');
+        const completeRoundButton = document.getElementById('completeRoundButton');
+        const waitingResourcesContainer = document.getElementById('waitingResources');
+
+        // --- Helper Functions ---
+        function getRandomInt(min, max) {
+            min = Math.ceil(min);
+            max = Math.floor(max);
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // --- STORY MANAGER OBJECT ---
+        const StoryManager = {
+            allStoriesData: [], // All 20 predefined stories
+            activeStories: [], // Stories currently on the board
+            nextStoryId: 1,
+
+            init: function() {
+                this.generateAllStories();
+                // Populate initial visible backlog (first 5 stories)
+                for (let i = 0; i < Math.min(5, this.allStoriesData.length); i++) {
+                    this.allStoriesData[i].status = 'backlog';
+                    this.activeStories.push(this.allStoriesData[i]);
+                }
+            },
+
+            /**
+             * Generates all 20 predefined user stories at the start of the game.
+             */
+            generateAllStories: function() {
+                const predefinedStoriesData = [
+                    { id: 1, description: "User Login & Registration", price: 150, analysisEffort: 8, devEffort: 18, testEffort: 10 },
+                    { id: 2, description: "Product Catalog Search", price: 120, analysisEffort: 6, devEffort: 15, testEffort: 8 },
+                    { id: 3, description: "Shopping Cart Functionality", price: 180, analysisEffort: 10, devEffort: 20, testEffort: 12 },
+                    { id: 4, description: "Payment Gateway Integration", price: 200, analysisEffort: 12, devEffort: 25, testEffort: 15 },
+                    { id: 5, description: "User Profile Management", price: 100, analysisEffort: 5, devEffort: 12, testEffort: 7 },
+                    { id: 6, description: "Order History View", price: 90, analysisEffort: 4, devEffort: 10, testEffort: 6 },
+                    { id: 7, description: "Admin Product Management", price: 160, analysisEffort: 9, devEffort: 19, testEffort: 11 },
+                    { id: 8, description: "Forgot Password Flow", price: 70, analysisEffort: 3, devEffort: 8, testEffort: 5 },
+                    { id: 9, description: "Email Notification System", price: 110, analysisEffort: 6, devEffort: 14, testEffort: 9 },
+                    { id: 10, description: "Customer Support Chatbot", price: 170, analysisEffort: 11, devEffort: 22, testEffort: 13 },
+                    { id: 11, description: "Product Reviews & Ratings", price: 130, analysisEffort: 7, devEffort: 16, testEffort: 9 },
+                    { id: 12, description: "Wishlist Feature", price: 80, analysisEffort: 4, devEffort: 9, testEffort: 5 },
+                    { id: 13, description: "API for Mobile App", price: 190, analysisEffort: 10, devEffort: 23, testEffort: 14 },
+                    { id: 14, description: "Search Engine Optimization (SEO)", price: 60, analysisEffort: 3, devEffort: 7, testEffort: 4 },
+                    { id: 15, description: "Data Analytics Dashboard", price: 220, analysisEffort: 15, devEffort: 28, testEffort: 18 },
+                    { id: 16, description: "GDPR Compliance", price: 140, analysisEffort: 8, devEffort: 17, testEffort: 10 },
+                    { id: 17, description: "Multi-language Support", price: 160, analysisEffort: 9, devEffort: 20, testEffort: 11 },
+                    { id: 18, description: "Guest Checkout", price: 95, analysisEffort: 5, devEffort: 11, testEffort: 6 },
+                    { id: 19, description: "Referral Program", price: 125, analysisEffort: 7, devEffort: 16, testEffort: 9 },
+                    { id: 20, description: "Server Performance Optimization", price: 175, analysisEffort: 10, devEffort: 24, testEffort: 15 }
+                ];
+
+                this.allStoriesData = predefinedStoriesData.map(data => ({
+                    ...data,
+                    status: 'hidden-backlog', // All start as hidden
+                    allocatedResources: [],
+                    daysInPrioritized: 0 // New field for prioritized stories
+                }));
+            },
+
+            /**
+             * Replenishes the backlog with new stories from the allStoriesData pool.
+             */
+            replenishBacklog: function() {
+                const currentBacklogCount = this.activeStories.filter(s => s.status === 'backlog').length;
+                const storiesNeeded = 5 - currentBacklogCount;
+
+                if (storiesNeeded > 0) {
+                    const hiddenStories = this.allStoriesData.filter(s => s.status === 'hidden-backlog');
+                    for (let i = 0; i < storiesNeeded && i < hiddenStories.length; i++) {
+                        const storyToReveal = hiddenStories[i];
+                        storyToReveal.status = 'backlog';
+                        this.activeStories.push(storyToReveal);
+                    }
+                }
+            },
+
+            /**
+             * Renders all user stories into their respective columns, including allocated resources.
+             */
+            renderAllStories: function() {
+                // Clear existing cards from all columns
+                const allColumns = [
+                    backlogColumn, prioritizedColumn, analyzedInProgressColumn, analyzedDoneColumn,
+                    developedInProgressColumn, developedDoneColumn, testingColumn, deployedColumn
+                ];
+                allColumns.forEach(column => {
+                    column.querySelectorAll('.kanban-card').forEach(card => card.remove());
+                });
+
+                // Iterate through user stories currently on the board and append them to the correct column
+                this.activeStories.forEach(story => {
+                    const card = document.createElement('div');
+                    card.classList.add('kanban-card');
+                    card.setAttribute('draggable', true);
+                    card.dataset.id = story.id;
+
+                    // Add specific class for prioritized stories based on readiness
+                    if (story.status === 'prioritized') {
+                        if (story.daysInPrioritized >= 1) { // Story has spent at least 1 full day
+                            card.classList.add('prioritized-ready');
+                        } else {
+                            card.classList.add('prioritized-not-ready');
+                        }
+                    } else if (story.status === 'deployed') {
+                        card.classList.add('deployed-story'); // Add class for deployed stories
+                    }
+
+                    // Add drag and drop event listeners to the card itself for resource drops
+                    card.addEventListener('dragover', DragAndDropManager.handleCardDragOver);
+                    card.addEventListener('dragleave', DragAndDropManager.handleCardDragLeave);
+                    card.addEventListener('drop', DragAndDropManager.handleCardDrop);
+
+                    // Story description and details
+                    const descriptionElement = document.createElement('div');
+                    descriptionElement.classList.add('story-description');
+                    descriptionElement.textContent = `ID: ${story.id} - ${story.description}`;
+
+                    const detailsElement = document.createElement('div');
+                    detailsElement.classList.add('story-details');
+
+                    let detailsHtml = `Price: $${story.price}`;
+
+                    // Only show effort details if not deployed
+                    if (story.status !== 'deployed') {
+                        let analysisEffortHtml = `<span class="effort-line">Analysis Effort: ${story.analysisEffort}</span>`;
+                        let devEffortHtml = `<span class="effort-line">Dev Effort: ${story.devEffort}</span>`;
+                        let testEffortHtml = `<span class="effort-line">Test Effort: ${story.testEffort}</span>`;
+
+                        // Highlight relevant effort
+                        if (story.status === 'analyzed-in-progress') {
+                            analysisEffortHtml = `<span class="effort-line highlight-effort">Analysis Effort: ${story.analysisEffort}</span>`;
+                        } else if (story.status === 'developed-in-progress') {
+                            devEffortHtml = `<span class="effort-line highlight-effort">Dev Effort: ${story.devEffort}</span>`;
+                        } else if (story.status === 'testing') {
+                            testEffortHtml = `<span class="effort-line highlight-effort">Test Effort: ${story.testEffort}</span>`;
+                        }
+                        detailsHtml += `<br>${analysisEffortHtml}<br>${devEffortHtml}<br>${testEffortHtml}`;
+                    }
+
+                    // Add daysInPrioritized for debug/info
+                    if (story.status === 'prioritized') {
+                        detailsHtml += `<br>Days in Prioritized: ${story.daysInPrioritized}`;
+                    }
+
+                    detailsElement.innerHTML = detailsHtml;
+                    card.appendChild(descriptionElement);
+                    card.appendChild(detailsElement);
+
+                    // Container for allocated resources within the card
+                    const allocatedResourcesContainer = document.createElement('div');
+                    allocatedResourcesContainer.classList.add('allocated-resources-container');
+                    card.appendChild(allocatedResourcesContainer);
+
+                    // Append already allocated resources to this card
+                    story.allocatedResources.forEach(res => {
+                        if (res.element) {
+                            res.element.classList.add('allocated'); // Mark as allocated
+                            allocatedResourcesContainer.appendChild(res.element);
+                        }
+                    });
+
+                    // Add drag event listeners to the card for story drags (to columns)
+                    card.addEventListener('dragstart', DragAndDropManager.handleStoryDragStart);
+
+                    // Append card to the correct column based on its status
+                    switch (story.status) {
+                        case 'backlog':
+                            backlogColumn.appendChild(card);
+                            break;
+                        case 'prioritized':
+                            prioritizedColumn.appendChild(card);
+                            break;
+                        case 'analyzed-in-progress':
+                            analyzedInProgressColumn.appendChild(card);
+                            break;
+                        case 'analyzed-done':
+                            analyzedDoneColumn.appendChild(card);
+                            break;
+                        case 'developed-in-progress':
+                            developedInProgressColumn.appendChild(card);
+                            break;
+                        case 'developed-done':
+                            developedDoneColumn.appendChild(card);
+                            break;
+                        case 'testing':
+                            testingColumn.appendChild(card);
+                            break;
+                        case 'deployed':
+                            deployedColumn.appendChild(card);
+                            break;
+                    }
+                });
+            },
+
+            /**
+             * Finds a story by its ID.
+             * @param {number} id - The ID of the story.
+             * @returns {object|undefined} The story object or undefined if not found.
+             */
+            getStoryById: function(id) {
+                return this.activeStories.find(story => story.id == id);
+            },
+
+            /**
+             * Gets all stories currently in the 'deployed' status.
+             * @returns {Array<object>} An array of deployed story objects.
+             */
+            getDeployedStories: function() {
+                return this.activeStories.filter(story => story.status === 'deployed');
+            },
+
+            /**
+             * Filters out stories that have completed a cycle (e.g., deployed and removed from board).
+             * (This was commented out previously, but would be managed here if stories were to be truly removed.)
+             */
+            cleanUpCompletedStories: function() {
+                // For this game's current logic, deployed stories stay visible.
+                // If they were to be removed, this is where you'd filter `this.activeStories`.
+            }
+        };
+
+        // --- RESOURCE MANAGER OBJECT ---
+        const ResourceManager = {
+            availableResources: [], // Stores { id: 'analyst_1', type: 'analyst', element: HTMLDivElement }
+            nextResourceId: 1,
+            initialCount: 3,
+
+            init: function() {
+                ['analyst', 'developer', 'tester'].forEach(type => {
+                    for (let i = 0; i < this.initialCount; i++) {
+                        this.availableResources.push({
+                            id: `${type}_${this.nextResourceId++}`,
+                            type: type,
+                            element: null // Will be set during renderAvailableResources
+                        });
+                    }
+                });
+            },
+
+            /**
+             * Renders all available resources in the waiting area.
+             */
+            renderAvailableResources: function() {
+                waitingResourcesContainer.innerHTML = ''; // Clear current resources
+
+                this.availableResources.forEach(resource => {
+                    const resourceEl = document.createElement('div');
+                    resourceEl.classList.add('resource');
+                    resourceEl.setAttribute('draggable', true);
+                    resourceEl.dataset.resourceId = resource.id;
+                    resourceEl.dataset.resourceType = resource.type;
+
+                    let iconClass = '';
+                    if (resource.type === 'analyst') {
+                        iconClass = 'fas fa-user-tie';
+                    } else if (resource.type === 'developer') {
+                        iconClass = 'fas fa-laptop-code';
+                    } else if (resource.type === 'tester') {
+                        iconClass = 'fas fa-bug';
+                    }
+                    resourceEl.innerHTML = `<i class="${iconClass}"></i>`;
+
+                    resourceEl.addEventListener('dragstart', DragAndDropManager.handleResourceDragStart);
+                    waitingResourcesContainer.appendChild(resourceEl);
+
+                    // Store reference to the actual DOM element
+                    resource.element = resourceEl;
+                });
+            },
+
+            /**
+             * Gets a resource by its ID.
+             * @param {string} id - The ID of the resource.
+             * @returns {object|undefined} The resource object or undefined if not found.
+             */
+            getResourceById: function(id) {
+                return this.availableResources.find(res => res.id === id);
+            },
+
+            /**
+             * Removes a resource from the available pool.
+             * @param {string} id - The ID of the resource to remove.
+             */
+            removeResource: function(id) {
+                this.availableResources = this.availableResources.filter(res => res.id !== id);
+            },
+
+            /**
+             * Adds a resource back to the available pool.
+             * @param {object} resource - The resource object to add.
+             */
+            addResource: function(resource) {
+                if (!this.availableResources.some(res => res.id === resource.id)) {
+                    this.availableResources.push(resource);
+                }
+            }
+        };
+
+        // --- DRAG AND DROP MANAGER OBJECT ---
+        const DragAndDropManager = {
+            draggedStoryCard: null,
+            draggedResourceElement: null,
+            originalResourceParentStory: null,
+            storyManager: null, // Dependency injection
+            resourceManager: null, // Dependency injection
+
+            init: function(storyMgr, resourceMgr) {
+                this.storyManager = storyMgr;
+                this.resourceManager = resourceMgr;
+
+                // Add event listeners to columns for story drops
+                const columns = document.querySelectorAll('.kanban-column');
+                columns.forEach(column => {
+                    column.addEventListener('dragover', this.handleColumnDragOver);
+                    column.addEventListener('dragleave', this.handleColumnDragLeave);
+                    // Bind to ensure 'this' refers to DragAndDropManager, while e.currentTarget refers to the DOM element
+                    column.addEventListener('drop', this.handleColumnDrop.bind(this));
+                });
+
+                // Add event listeners for resource waiting area drops
+                waitingResourcesContainer.addEventListener('dragover', this.handleWaitingAreaDragOver);
+                waitingResourcesContainer.addEventListener('dragleave', this.handleWaitingAreaDragLeave);
+                // Bind to ensure 'this' refers to DragAndDropManager, while e.currentTarget refers to the DOM element
+                waitingResourcesContainer.addEventListener('drop', this.handleWaitingAreaDrop.bind(this));
+
+                // Global dragend listener for both stories and resources
+                document.addEventListener('dragend', (e) => {
+                    if (e.target.classList.contains('kanban-card')) {
+                        this.handleStoryDragEnd(e);
+                    } else if (e.target.classList.contains('resource')) {
+                        this.handleResourceDragEnd(e);
+                    }
+                });
+            },
+
+            // --- Story Drag & Drop Handlers ---
+            handleStoryDragStart: function(e) {
+                DragAndDropManager.draggedStoryCard = this; // 'this' refers to the card element
+                e.dataTransfer.setData('text/plain', this.dataset.id);
+                e.dataTransfer.effectAllowed = 'move';
+                this.classList.add('dragging');
+            },
+
+            handleColumnDragOver: function(e) {
+                e.preventDefault();
+                if (!e.dataTransfer.types.includes('text/resource-id')) {
+                    e.dataTransfer.dropEffect = 'move';
+                    // Use e.currentTarget to access the DOM element
+                    e.currentTarget.classList.add('drag-over');
+                }
+            },
+
+            handleColumnDragLeave: function(e) {
+                // Use e.currentTarget to access the DOM element
+                e.currentTarget.classList.remove('drag-over');
+            },
+
+            handleColumnDrop: function(e) {
+                e.preventDefault();
+                // Use e.currentTarget to access the DOM element
+                e.currentTarget.classList.remove('drag-over');
+
+                console.log("--- Story Drop Attempt ---");
+
+                if (e.dataTransfer.types.includes('text/resource-id')) {
+                    console.log("Ignored: This is a resource drag, not a story drag.");
+                    return; // Not a story drag, ignore
+                }
+
+                const storyId = e.dataTransfer.getData('text/plain');
+                const droppedColumnId = e.currentTarget.id; // Correctly gets the ID of the column DOM element
+
+                console.log("Story ID:", storyId);
+                console.log("Dropped Column ID (e.currentTarget.id):", droppedColumnId);
+
+                const story = this.storyManager.getStoryById(storyId);
+                console.log("Story found:", !!story);
+                if (!story) {
+                    console.log("Error: Story not found in active stories.");
+                    return;
+                }
+
+                const currentStatus = story.status;
+                console.log("Story currentStatus:", currentStatus);
+                let isValidMove = false;
+
+                // --- Capacity Checks ---
+                let allowDropBasedOnCapacity = true;
+                if (droppedColumnId === 'prioritized') {
+                    const currentPrioritizedCount = prioritizedColumn.querySelectorAll('.kanban-card').length;
+                    console.log("Prioritized column current count:", currentPrioritizedCount);
+                    if (currentPrioritizedCount >= 3) {
+                        allowDropBasedOnCapacity = false;
+                        console.log("Capacity limit reached for Prioritized column.");
+                    }
+                } else if (droppedColumnId === 'analyzed-in-progress' || droppedColumnId === 'analyzed-done') {
+                    const currentAnalysisCount = analyzedInProgressColumn.querySelectorAll('.kanban-card').length + analyzedDoneColumn.querySelectorAll('.kanban-card').length;
+                    console.log("Analysis group current count:", currentAnalysisCount);
+                    if (currentAnalysisCount >= 4 && !(currentStatus === 'analyzed-in-progress' || currentStatus === 'analyzed-done')) {
+                        allowDropBasedOnCapacity = false;
+                        console.log("Capacity limit reached for Analysis group.");
+                    }
+                } else if (droppedColumnId === 'developed-in-progress' || droppedColumnId === 'developed-done') {
+                    const currentDevCount = developedInProgressColumn.querySelectorAll('.kanban-card').length + developedDoneColumn.querySelectorAll('.kanban-card').length;
+                    console.log("Development group current count:", currentDevCount);
+                    if (currentDevCount >= 3 && !(currentStatus === 'developed-in-progress' || currentStatus === 'developed-done')) {
+                        allowDropBasedOnCapacity = false;
+                        console.log("Capacity limit reached for Development group.");
+                    }
+                } else if (droppedColumnId === 'testing') {
+                    const currentTestingCount = testingColumn.querySelectorAll('.kanban-card').length;
+                    console.log("Testing column current count:", currentTestingCount);
+                    if (currentTestingCount >= 3 && currentStatus !== 'testing') {
+                        allowDropBasedOnCapacity = false;
+                        console.log("Capacity limit reached for Testing column.");
+                    }
+                } else if (droppedColumnId === 'deployed') {
+                    console.log("Checking deployed column rules.");
+                    if (currentStatus !== 'testing' || story.testEffort > 0) {
+                        allowDropBasedOnCapacity = false; // Only allow if coming from testing and test effort is 0
+                        console.log("Invalid move to Deployed: Not from Testing or effort not 0.");
+                    }
+                }
+
+                console.log("Allow drop based on capacity:", allowDropBasedOnCapacity);
+                if (!allowDropBasedOnCapacity) {
+                    return;
+                }
+
+                // --- Valid Transition Checks ---
+                switch (currentStatus) {
+                    case 'backlog':
+                        if (droppedColumnId === 'prioritized') {
+                            isValidMove = true;
+                            story.daysInPrioritized = 0;
+                            console.log("Valid move: Backlog to Prioritized.");
+                        } else {
+                            console.log("Invalid move: Backlog can only move to Prioritized.");
+                        }
+                        break;
+                    case 'prioritized':
+                        if (droppedColumnId === 'analyzed-in-progress' && story.daysInPrioritized >= 1) {
+                            isValidMove = true;
+                            console.log("Valid move: Prioritized to Analysis (In Progress).");
+                        } else {
+                            console.log("Invalid move: Prioritized requires >=1 day or invalid target.");
+                        }
+                        break;
+                    case 'analyzed-done':
+                        if (droppedColumnId === 'developed-in-progress') {
+                            isValidMove = true;
+                            console.log("Valid move: Analysis (Done) to Development (In Progress).");
+                        } else {
+                            console.log("Invalid move: Analysis (Done) can only move to Development (In Progress).");
+                        }
+                        break;
+                    case 'developed-in-progress':
+                        if (droppedColumnId === 'developed-done' && story.devEffort === 0) {
+                            isValidMove = true;
+                            console.log("Valid move: Development (In Progress) to Development (Done).");
+                        } else {
+                            console.log("Invalid move: Dev (In Progress) requires 0 effort or invalid target.");
+                        }
+                        break;
+                    case 'developed-done':
+                        if (droppedColumnId === 'testing') {
+                            isValidMove = true;
+                            console.log("Valid move: Development (Done) to Testing.");
+                        } else {
+                            console.log("Invalid move: Dev (Done) can only move to Testing.");
+                        }
+                        break;
+                    case 'analyzed-in-progress': // This case should ideally be handled by its effort reaching 0
+                        if (droppedColumnId === 'analyzed-done' && story.analysisEffort === 0) {
+                             isValidMove = true;
+                             console.log("Valid move: Analysis (In Progress) to Analysis (Done) - Manual move.");
+                        } else {
+                            console.log("Invalid move: Analysis (In Progress) requires 0 effort or invalid target.");
+                        }
+                        break;
+                    case 'testing':
+                        if (droppedColumnId === 'deployed' && story.testEffort === 0) {
+                            isValidMove = true;
+                            console.log("Valid move: Testing to Deployed.");
+                        } else {
+                            console.log("Invalid move: Testing requires 0 effort or invalid target.");
+                        }
+                        break;
+                    default:
+                        console.log("No valid transition defined for current status:", currentStatus);
+                        break;
+                }
+
+                console.log("Final isValidMove:", isValidMove);
+
+                if (isValidMove) {
+                    story.status = droppedColumnId;
+                    this.storyManager.renderAllStories(); // Re-render after state change
+                    console.log(`Story ID ${story.id} successfully moved to ${droppedColumnId}`);
+                } else {
+                    console.log(`Story ID ${story.id} move to ${droppedColumnId} was blocked.`);
+                }
+                this.draggedStoryCard = null;
+                console.log("--- End Story Drop Attempt ---");
+            },
+
+            handleStoryDragEnd: function(e) {
+                if (this.draggedStoryCard) {
+                    this.draggedStoryCard.classList.remove('dragging');
+                }
+                this.draggedStoryCard = null;
+            },
+
+            // --- Resource Drag & Drop Handlers ---
+            handleResourceDragStart: function(e) {
+                DragAndDropManager.draggedResourceElement = this; // 'this' refers to the resource element
+                e.dataTransfer.setData('text/resource-id', this.dataset.resourceId);
+                e.dataTransfer.setData('text/resource-type', this.dataset.resourceType);
+                e.dataTransfer.effectAllowed = 'move';
+
+                const parentCard = this.closest('.kanban-card');
+                if (parentCard) {
+                    DragAndDropManager.originalResourceParentStory = DragAndDropManager.storyManager.getStoryById(parentCard.dataset.id);
+                    e.dataTransfer.setData('text/origin-story-id', parentCard.dataset.id);
+                } else {
+                    DragAndDropManager.originalResourceParentStory = null;
+                    e.dataTransfer.setData('text/origin-story-id', 'none');
+                }
+                this.classList.add('dragging-resource');
+            },
+
+            handleCardDragOver: function(e) {
+                if (e.dataTransfer.types.includes('text/resource-id')) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    this.classList.add('drag-over-resource');
+                }
+            },
+
+            handleCardDragLeave: function(e) {
+                this.classList.remove('drag-over-resource');
+            },
+
+            handleCardDrop: function(e) {
+                e.preventDefault();
+                this.classList.remove('drag-over-resource');
+
+                if (!e.dataTransfer.types.includes('text/resource-id')) {
+                    return;
+                }
+
+                const resourceId = e.dataTransfer.getData('text/resource-id');
+                const resourceType = e.dataTransfer.getData('text/resource-type');
+                const targetStoryId = this.dataset.id; // 'this' refers to the card element
+                const originStoryId = e.dataTransfer.getData('text/origin-story-id');
+
+                const targetStory = DragAndDropManager.storyManager.getStoryById(targetStoryId);
+                if (!targetStory) return;
+
+                let resourceToAllocate = DragAndDropManager.resourceManager.getResourceById(resourceId);
+                let resourceWasOnStory = false;
+
+                if (!resourceToAllocate) {
+                    // Resource was on a story, find it there
+                    const foundInStory = DragAndDropManager.storyManager.activeStories.find(s => s.allocatedResources.some(res => res.id === resourceId));
+                    if (foundInStory) {
+                        resourceToAllocate = foundInStory.allocatedResources.find(res => res.id === resourceId);
+                        resourceWasOnStory = true;
+                    }
+                }
+
+                if (!resourceToAllocate) return;
+
+                let canAllocate = false;
+                if (targetStory.status === 'analyzed-in-progress' && resourceType === 'analyst') {
+                    canAllocate = true;
+                } else if (targetStory.status === 'developed-in-progress' && resourceType === 'developer') {
+                    canAllocate = true;
+                } else if (targetStory.status === 'testing' && resourceType === 'tester') {
+                    canAllocate = true;
+                }
+
+                if (canAllocate) {
+                    // Remove from previous location (if any)
+                    if (originStoryId !== 'none' && originStoryId !== targetStoryId) { // If moving from another story
+                        const oldStory = DragAndDropManager.storyManager.getStoryById(originStoryId);
+                        if (oldStory) {
+                            oldStory.allocatedResources = oldStory.allocatedResources.filter(res => res.id !== resourceId);
+                        }
+                    } else if (!resourceWasOnStory) { // If coming from the waiting area
+                        DragAndDropManager.resourceManager.removeResource(resourceId);
+                    }
+
+                    // Add to target story's allocated resources (if not already there)
+                    if (!targetStory.allocatedResources.some(res => res.id === resourceId)) {
+                        targetStory.allocatedResources.push(resourceToAllocate);
+                    }
+
+                    resourceToAllocate.element.classList.remove('dragging-resource');
+                    resourceToAllocate.element.classList.add('allocated');
+                    this.querySelector('.allocated-resources-container').appendChild(resourceToAllocate.element);
+
+                    DragAndDropManager.resourceManager.renderAvailableResources();
+                    DragAndDropManager.storyManager.renderAllStories();
+                }
+            },
+
+            handleWaitingAreaDragOver: function(e) {
+                if (e.dataTransfer.types.includes('text/resource-id')) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    // Use e.currentTarget to access the DOM element
+                    e.currentTarget.classList.add('drag-over');
+                }
+            },
+
+            handleWaitingAreaDragLeave: function(e) {
+                // Use e.currentTarget to access the DOM element
+                e.currentTarget.classList.remove('drag-over');
+            },
+
+            handleWaitingAreaDrop: function(e) {
+                e.preventDefault();
+                // Use e.currentTarget to access the DOM element
+                e.currentTarget.classList.remove('drag-over');
+
+                if (!e.dataTransfer.types.includes('text/resource-id')) {
+                    return;
+                }
+
+                const resourceId = e.dataTransfer.getData('text/resource-id');
+                const originStoryId = e.dataTransfer.getData('text/origin-story-id');
+
+                let resourceToReturn = DragAndDropManager.resourceManager.getResourceById(resourceId);
+
+                if (!resourceToReturn && originStoryId !== 'none') {
+                    // If not in available resources, it must be on a story
+                    const originStory = DragAndDropManager.storyManager.getStoryById(originStoryId);
+                    if (originStory) {
+                        resourceToReturn = originStory.allocatedResources.find(res => res.id === resourceId);
+                        if (resourceToReturn) {
+                            originStory.allocatedResources = originStory.allocatedResources.filter(res => res.id !== resourceId);
+                        }
+                    }
+                }
+
+                if (resourceToReturn) {
+                    DragAndDropManager.resourceManager.addResource(resourceToReturn);
+                    resourceToReturn.element.classList.remove('allocated');
+                    resourceToReturn.element.classList.remove('dragging-resource');
+                    // The element will be re-rendered by renderAvailableResources if it's new to the pool
+                    // or if it was already in the waiting area (it just stays there).
+                }
+
+                DragAndDropManager.resourceManager.renderAvailableResources();
+                DragAndDropManager.storyManager.renderAllStories(); // Important to re-render stories to remove resource from old card
+            },
+
+            handleResourceDragEnd: function(e) {
+                if (this.draggedResourceElement) {
+                    this.draggedResourceElement.classList.remove('dragging-resource');
+                }
+                this.draggedResourceElement = null;
+                this.originalResourceParentStory = null;
+            }
+        };
+
+        // --- GAME MANAGER OBJECT (MAIN GAME LOGIC) ---
+        const GameManager = {
+            currentDay: 1,
+            maxDays: 35,
+            totalProfit: 0,
+            storyManager: StoryManager, // Link managers
+            resourceManager: ResourceManager, // Link managers
+            dragAndDropManager: DragAndDropManager, // Link managers
+
+            init: function() {
+                this.storyManager.init();
+                this.resourceManager.init();
+                // Initialize DragAndDropManager with references to other managers
+                this.dragAndDropManager.init(this.storyManager, this.resourceManager);
+
+                this.resourceManager.renderAvailableResources();
+                this.storyManager.renderAllStories();
+                this.updateStatsDisplay();
+
+                completeRoundButton.addEventListener('click', this.completeRound.bind(this));
+            },
+
+            /**
+             * Updates the day counter and profit display.
+             */
+            updateStatsDisplay: function() {
+                dayCounterDisplay.textContent = `Day: ${this.currentDay} / ${this.maxDays}`;
+                profitDisplay.textContent = `Profit: $${this.totalProfit}`;
+
+                if (this.currentDay >= this.maxDays) {
+                    completeRoundButton.disabled = true;
+                    dayCounterDisplay.textContent = `Game Over! Final Day: ${this.currentDay}`;
+                    // Future: Display final score, game over message
+                }
+            },
+
+            /**
+             * Completes the current round (Execution Phase), increments the day,
+             * applies allocated effort, moves stories, and updates displays.
+             */
+            completeRound: function() {
+                if (this.currentDay >= this.maxDays) return;
+
+                const storiesToReallocateResourcesFrom = [];
+
+                this.storyManager.activeStories.forEach(story => {
+                    let storyMovedThisRound = false;
+
+                    if (story.status === 'prioritized') {
+                        story.daysInPrioritized++;
+                    }
+
+                    story.allocatedResources.forEach(allocatedRes => {
+                        const effortDelivered = getRandomInt(4, 8); // Corrected typo here!
+
+                        if (story.status === 'analyzed-in-progress' && allocatedRes.type === 'analyst') {
+                            story.analysisEffort -= effortDelivered;
+                            if (story.analysisEffort < 0) story.analysisEffort = 0;
+                        } else if (story.status === 'developed-in-progress' && allocatedRes.type === 'developer') {
+                            story.devEffort -= effortDelivered;
+                            if (story.devEffort < 0) story.devEffort = 0;
+                        } else if (story.status === 'testing' && allocatedRes.type === 'tester') {
+                            story.testEffort -= effortDelivered;
+                            if (story.testEffort < 0) story.testEffort = 0;
+                        }
+                    });
+
+                    // Check for story progression based on effort reaching zero
+                    if (story.status === 'analyzed-in-progress' && story.analysisEffort === 0) {
+                        story.status = 'analyzed-done';
+                        storyMovedThisRound = true;
+                    } else if (story.status === 'developed-in-progress' && story.devEffort === 0) {
+                        story.status = 'developed-done';
+                        storyMovedThisRound = true;
+                    } else if (story.status === 'testing' && story.testEffort === 0) {
+                        story.status = 'deployed';
+                        storyMovedThisRound = true;
+                    }
+
+                    if (storyMovedThisRound) {
+                        storiesToReallocateResourcesFrom.push(story);
+                    }
+                });
+
+                // Reallocate resources that returned to the waiting area
+                storiesToReallocateResourcesFrom.forEach(story => {
+                    story.allocatedResources.forEach(res => {
+                        res.element.classList.remove('allocated');
+                        this.resourceManager.addResource(res); // Add resource back to available pool via manager
+                    });
+                    story.allocatedResources = []; // Clear allocated resources for this story
+                });
+
+                // Profit calculation: Sum prices of all stories currently in the 'deployed' column and add to totalProfit
+                let deployedProfitThisRound = 0;
+                this.storyManager.getDeployedStories().forEach(deployedStory => {
+                    deployedProfitThisRound += deployedStory.price;
+                });
+                this.totalProfit += deployedProfitThisRound;
+
+
+                this.currentDay++;
+                this.storyManager.replenishBacklog();
+                this.updateStatsDisplay();
+                this.resourceManager.renderAvailableResources();
+                this.storyManager.renderAllStories();
+            }
+        };
+
+        // --- Initial Game Setup ---
+        // Start the game by initializing the GameManager
+        GameManager.init();
+    </script>
+</body>
+</html>
